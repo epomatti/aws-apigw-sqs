@@ -120,50 +120,11 @@ module "iam_sqs" {
 
 ### CloudWatch ###
 
-# (THIS IS REGION WIDE, REMOVE IF YO ALREADY HAVE IT)
 resource "aws_api_gateway_account" "ApiGatewayAccountSetting" {
-  cloudwatch_role_arn = aws_iam_role.APIGatewayCloudWatchRole.arn
+  cloudwatch_role_arn = module.iam_logs.role_arn
 }
 
-resource "aws_iam_role" "APIGatewayCloudWatchRole" {
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "",
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "apigateway.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
+module "iam_logs" {
+  source = "./modules/iam-logs"
 }
 
-resource "aws_iam_role_policy" "APIGatewayCloudWatchPolicy" {
-  role = aws_iam_role.APIGatewayCloudWatchRole.id
-
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:DescribeLogGroups",
-                "logs:DescribeLogStreams",
-                "logs:PutLogEvents",
-                "logs:GetLogEvents",
-                "logs:FilterLogEvents"
-            ],
-            "Resource": "*"
-        }
-    ]
-}
-EOF
-}
