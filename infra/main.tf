@@ -6,9 +6,6 @@ terraform {
   }
 }
 
-# https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-deployments.html
-# https://github.com/aws-samples/serverless-patterns/blob/main/apigw-sqs-terraform/main.tf
-
 provider "aws" {
   region = var.region
 }
@@ -43,7 +40,7 @@ resource "aws_api_gateway_stage" "slackbot" {
 
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.default.arn
-    format          = "{ \"requestId\":\"$context.requestId\", \"ip\": \"$context.identity.sourceIp\", \"requestTime\":\"$context.requestTime\", \"httpMethod\":\"$context.httpMethod\",\"routeKey\":\"$context.routeKey\", \"status\":\"$context.status\",\"protocol\":\"$context.protocol\", \"responseLength\":\"$context.responseLength\" }"
+    format          = file("${path.module}/accessLogFormat.json")
   }
 
   lifecycle {
@@ -57,7 +54,6 @@ resource "aws_api_gateway_method_settings" "default" {
   method_path = "*/*"
 
   settings {
-    # Enable CloudWatch logging and metrics
     metrics_enabled = true
     logging_level   = "INFO"
   }
@@ -104,7 +100,7 @@ resource "aws_api_gateway_integration" "integration" {
   integration_http_method = "POST"
   type                    = "AWS"
   uri                     = "arn:aws:apigateway:${var.region}:sqs:path/${local.account}/${aws_sqs_queue.ec2_instance_stop_in.name}"
-  credentials             = aws_iam_role.apigateway.arn
+  credentials             = module.iam_sqs.role_arn
 
   passthrough_behavior = "NEVER"
   request_parameters = {
@@ -117,43 +113,10 @@ resource "aws_api_gateway_integration" "integration" {
 
 ### SQS Integration Role ###
 
-resource "aws_iam_role" "apigateway" {
-  name = "SlackBotAPIGatewayIntegration"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "apigateway.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
+module "iam_sqs" {
+  source        = "./modules/iam-sqs"
+  sqs_queue_arn = aws_sqs_queue.ec2_instance_stop_in.arn
 }
-
-resource "aws_iam_policy" "apigateway" {
-  policy = jsonencode({
-    "Version" : "2012-10-17",
-    "Statement" : [
-      {
-        "Effect" : "Allow",
-        "Action" : [
-          "sqs:SendMessage",
-          "sqs:SendMessageBatch"
-        ],
-        "Resource" : "${aws_sqs_queue.ec2_instance_stop_in.arn}"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "apigateway" {
-  role       = aws_iam_role.apigateway.name
-  policy_arn = aws_iam_policy.apigateway.arn
-}
-
 
 ### CloudWatch ###
 
